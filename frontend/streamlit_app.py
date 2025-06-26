@@ -1,8 +1,11 @@
 # --- WORKAROUND VOOR SQLITE OP STREAMLIT CLOUD ---
 # Dit MOET helemaal bovenaan staan, nog voor de andere imports
-__import__('pysqlite3')
-import sys
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass # Lokaal op Windows zal dit falen, dat is prima.
 # --- EINDE WORKAROUND ---
 
 
@@ -11,7 +14,7 @@ import streamlit as st
 import pandas as pd
 import os
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import OllamaEmbeddings # Gebruikt voor LOKALE data-opbouw
+from langchain_community.embeddings import HuggingFaceEmbeddings # <<< DE BELANGRIJKE IMPORT
 from langchain_groq import ChatGroq
 from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
@@ -25,7 +28,6 @@ st.set_page_config(
 
 # --- FUNCTIES (Logica van de oude backend) ---
 
-# Gebruik caching om te voorkomen dat de chain elke keer opnieuw wordt geladen in de cloud
 @st.cache_resource
 def get_chain(_groq_api_key):
     """
@@ -46,21 +48,18 @@ def get_chain(_groq_api_key):
     )
 
     try:
-        # De embeddings worden lokaal met Ollama gemaakt en de vectorstore wordt ge-upload.
-        # De cloud app leest deze kant-en-klare vectorstore.
-        # We moeten wel een embedding functie meegeven. Lokaal is dit Ollama, 
-        # in de cloud zouden we een andere (bv. van Groq) kunnen gebruiken, maar dit werkt ook.
-        ollama_embeddings = OllamaEmbeddings(model="mistral")
+        # Gebruik nu de HuggingFace embeddings die overal werken
+        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2") # <<< HIER WORDT HET AANGEMAAKT
 
         vectordb = Chroma(
             persist_directory='vectorstore',
-            embedding_function=ollama_embeddings
+            embedding_function=embeddings # <<< EN HIER GEBRUIKT
         )
 
         # Voor het CHATTEN gebruiken we de SNELLE GROQ API
         llm = ChatGroq(
             temperature=0.0,
-            model_name="llama3-8b-8192", # Llama3 is een geweldig en snel model op Groq
+            model_name="llama3-8b-8192",
             groq_api_key=_groq_api_key
         )
 
@@ -79,8 +78,6 @@ def get_chain(_groq_api_key):
 st.title("🏘️🤖 RealEstateGPT")
 st.markdown("Chat met je vastgoedportefeuille.")
 
-# Haal de API-sleutel op uit de Streamlit Secrets
-# Voor lokaal testen, kun je de key handmatig invoeren.
 groq_api_key = ""
 try:
     groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -113,7 +110,7 @@ st.subheader("Chat")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    st.session_state.chat_history = [] # Zorg ervoor dat de chain history ook wordt gereset
+    st.session_state.chat_history = []
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -133,7 +130,6 @@ if prompt := st.chat_input("Stel een vraag..."):
             response = result.get("answer", "Sorry, ik kon geen antwoord genereren.")
             st.markdown(response)
             
-            # Update chat history for the chain
             st.session_state.chat_history.append((prompt, response))
 
     st.session_state.messages.append({"role": "assistant", "content": response})
