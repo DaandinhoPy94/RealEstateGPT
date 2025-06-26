@@ -1,55 +1,57 @@
 import argparse
 import os
 import pandas as pd
-from langchain_community.embeddings import OllamaEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain_core.documents import Document # <-- DE NIEUWE IMPORT
 
-def clean(df: pd.DataFrame) -> pd.DataFrame:
-    """Vult lege cellen in het DataFrame."""
+def load_and_prepare_df(csv_path: str) -> pd.DataFrame:
+    """
+    Laadt het CSV-bestand, voegt een ID-kolom toe en maakt het schoon.
+    """
+    df = pd.read_csv(csv_path)
+    df.insert(0, 'id', df.index)
+    df.columns = df.columns.str.lower().str.strip()
     return df.fillna("")
 
-def df_to_docs(df: pd.DataFrame) -> list[str]:
+def df_to_docs(df: pd.DataFrame) -> list[Document]: # <-- LET OP: geeft nu een lijst met Documenten terug
     """
-    Converteert elke rij van het DataFrame naar een beschrijvende,
-    natuurlijke taaltekst die beter is voor de AI.
+    Converteert elke rij van het DataFrame naar een beschrijvend Document-object.
     """
-    # Geef de eerste kolom een duidelijke naam
-    df = df.rename(columns={df.columns[0]: 'ID'})
-    
     docs = []
     for _, row in df.iterrows():
-        # Creëer een volledige zin voor elke rij
         doc_string = (
-            f"Dit is een pand met ID-nummer {row['ID']}. "
-            f"Het adres is {row['adress']}. "
+            f"Dit is een pand met ID-nummer {row['id']}. "
+            f"Het adres is {row['address']}. "
             f"Het is een pand van het type '{row['type']}'. "
-            f"De geschatte waarde is {row['Value']} euro. "
-            f"De leegstand is momenteel {row['VacancyRate'] * 100:.0f} procent. "
-            f"De jaarlijkse inkomsten zijn {row['AnualIncome']} euro. "
-            f"Het huidige huurcontract loopt af op {row['EndLease']}."
+            f"De geschatte waarde is {row['value']} euro. "
+            f"De leegstand is momenteel {row['vacancyrate'] * 100:.0f} procent. "
+            f"De jaarlijkse inkomsten zijn {row['anualincome']} euro. "
+            f"Het huidige huurcontract loopt af op {row['endlease']}."
         )
-        docs.append(doc_string)
+        # Stop de tekst (doc_string) in een Document-object "envelop"
+        docs.append(Document(page_content=doc_string)) # <-- DE CRUCIALE AANPASSING
     
-    print("\nVoorbeeld van een nieuw document:")
-    print(docs[0] if docs else "Geen documenten om te tonen.")
+    print("\nVoorbeeld van een nieuw document (inhoud):")
+    print(docs[0].page_content if docs else "Geen documenten om te tonen.")
     
     return docs
 
 def main(csv_path: str, vs_path: str = "vectorstore"):
     """Laadt de CSV, converteert het naar documenten en creëert de vectorstore."""
-    df = clean(pd.read_csv(csv_path))
+    df = load_and_prepare_df(csv_path)
     docs = df_to_docs(df)
 
-    print("\nEmbeddings creëren met Mistral. Dit kan even duren...")
-    ollama_embeddings = OllamaEmbeddings(model="mistral")
+    print("\nEmbeddings creëren met een lokaal model (all-MiniLM-L6-v2). Dit kan even duren...")
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
     vectordb = Chroma.from_documents(
         documents=docs,
-        embedding=ollama_embeddings,
+        embedding=embeddings,
         persist_directory=vs_path
     )
     vectordb.persist()
-    print(f"\nVectorstore opgeslagen in '{vs_path}' met de nieuwe document-structuur.")
+    print(f"\nVectorstore opgeslagen in '{vs_path}'. Dit was de laatste stap van de voorbereiding!")
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
