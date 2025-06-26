@@ -193,7 +193,7 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 # Generated files and directories
-vectorstore/
+# vectorstore/
 __pycache__/
 *.pyc
 
