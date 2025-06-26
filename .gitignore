@@ -192,3 +192,14 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+# Generated files and directories
+vectorstore/
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+
+# Log files
+*.log
+server_log.txt
