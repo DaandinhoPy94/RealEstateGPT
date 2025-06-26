@@ -10,7 +10,7 @@ except ImportError:
 import streamlit as st
 import pandas as pd
 import os
-import chromadb # <-- NIEUWE IMPORT
+import chromadb
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
@@ -34,27 +34,28 @@ def get_chain(_groq_api_key):
 
     Vraag: {question}
     Antwoord:"""
-    QA_PROMPT = PromptTemplate(template=template, input_variables=["context", "question"])
+    
+    # --- DE CORRECTIE IS HIER ---
+    # De variabele heet 'prompt_template', niet 'template'.
+    QA_PROMPT = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
 
     try:
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-        # STAP 1: ROBUUSTERE MANIER OM DE DATABASE TE LADEN (FIX VOOR CLOUD)
         client = chromadb.PersistentClient(path="vectorstore")
         vectordb = Chroma(
             client=client,
-            collection_name="langchain", # Standaard naam die LangChain gebruikt
+            collection_name="langchain",
             embedding_function=embeddings,
         )
 
         llm = ChatGroq(temperature=0.0, model_name="llama3-8b-8192", groq_api_key=_groq_api_key)
 
-        # STAP 2: MEER DOCUMENTEN OPHALEN (FIX VOOR KWALITEIT)
         retriever = vectordb.as_retriever(search_kwargs={"k": 10})
 
         chain = ConversationalRetrievalChain.from_llm(
             llm=llm,
-            retriever=retriever, # <-- Gebruik de nieuwe retriever
+            retriever=retriever,
             return_source_documents=True,
             combine_docs_chain_kwargs={"prompt": QA_PROMPT}
         )
@@ -112,3 +113,4 @@ if prompt := st.chat_input("Stel een vraag..."):
             st.session_state.chat_history.append((prompt, response))
 
     st.session_state.messages.append({"role": "assistant", "content": response})
+    
